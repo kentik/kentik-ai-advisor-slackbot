@@ -1,0 +1,26 @@
+[project]
+name = "ai-advisor-slackbot"
+version = "0.1.0"
+description = "Kentik AI Advisor Slackbot application"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "slack-bolt>=1.18.0",
+    "slack-sdk>=3.27.0",
+]
+
+[project.scripts]
+ai-advisor-slackbot = "ai_advisor_slackbot.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "black>=23.7.0",
+    "ruff>=0.0.282",
+]
