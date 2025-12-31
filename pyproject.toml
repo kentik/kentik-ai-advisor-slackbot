@@ -1,5 +1,5 @@
 [project]
-name = "ai-advisor-slackbot"
+name = "kentik-ai-advisor-slackbot"
 version = "0.1.0"
 description = "Kentik AI Advisor Slackbot application"
 readme = "README.md"
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ai-advisor-slackbot = "ai_advisor_slackbot.app:main"
+kentik-ai-advisor-slackbot = "kentik_ai_advisor_slackbot.app:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -26,7 +26,7 @@ A Slack bot application that enables seamless communication between Slack users 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd ai-advisor-slackbot
+cd kentik-ai-advisor-slackbot
 ```
 
 2. Install UV if you haven't already:
@@ -192,35 +192,35 @@ CONVERSATIONS_DB_PATH=conversations.db
 ### Running Locally
 
 ```bash
-uv run ai-advisor-slackbot
+uv run kentik-ai-advisor-slackbot
 ```
 
 ### Running with Docker
 
 1. Build the Docker image:
 ```bash
-docker build -t ai-advisor-slackbot .
+docker build -t kentik-ai-advisor-slackbot .
 ```
 
 2. Run the container:
 ```bash
 docker run -d --restart unless-stopped \
-  --name ai-advisor-slackbot \
+  --name kentik-ai-advisor-slackbot \
   -e SLACK_BOT_TOKEN='xoxb-your-token' \
   -e SLACK_APP_TOKEN='xapp-your-token' \
   -e KENTIK_API_URL='https://grpc.api.kentik.com' \
   -e KENTIK_API_EMAIL='your-email@company.com' \
   -e KENTIK_API_TOKEN='your-api-token' \
-  ai-advisor-slackbot:latest
+  kentik-ai-advisor-slackbot:latest
 ```
 
 Or use a `.env` file:
 ```bash
 docker run -d --restart unless-stopped \
-  --name ai-advisor-slackbot \
+  --name kentik-ai-advisor-slackbot \
   --env-file .env \
   -v $(pwd)/conversations.db:/app/conversations.db \
-  ai-advisor-slackbot:latest
+  kentik-ai-advisor-slackbot:latest
 ```
 
 ## How It Works
@@ -278,8 +278,8 @@ The bot handles AI Advisor's asynchronous pattern:
 ### Project Structure
 
 ```
-ai-advisor-slackbot/
-├── ai_advisor_slackbot/
+kentik-ai-advisor-slackbot/
+├── kentik_ai_advisor_slackbot/
 │   ├── __init__.py
 │   ├── app.py                    # Main Slack bot logic
 │   ├── ai_advisor_client.py       # AI Advisor API client
@@ -295,7 +295,7 @@ ai-advisor-slackbot/
 
 ### Bot doesn't respond to mentions
 
-1. Check bot is running: `docker logs ai-advisor-slackbot`
+1. Check bot is running: `docker logs kentik-ai-advisor-slackbot`
 2. Verify Socket Mode is enabled in Slack app settings
 3. Ensure `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN` are correct
 4. Check bot has `app_mentions:read` scope

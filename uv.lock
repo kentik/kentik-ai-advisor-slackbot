@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.10"
 
 [[package]]
-name = "ai-advisor-slackbot"
+name = "kentik-ai-advisor-slackbot"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

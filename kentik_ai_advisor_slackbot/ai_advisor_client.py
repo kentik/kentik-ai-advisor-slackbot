@@ -40,7 +40,7 @@ class AIAdvisorClient:
         self.headers = {
             "X-CH-Auth-Email": api_email,
             "X-CH-Auth-API-Token": api_token,
-            "User-Agent": f"ai-advisor-slackbot/{__version__}",
+            "User-Agent": f"kentik-ai-advisor-slackbot/{__version__}",
             "Content-Type": "application/json",
         }
 

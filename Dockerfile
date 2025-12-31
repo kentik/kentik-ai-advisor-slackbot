@@ -12,7 +12,7 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml ./
 COPY README.md ./
-COPY ai_advisor_slackbot/ ./ai_advisor_slackbot/
+COPY kentik_ai_advisor_slackbot/ ./kentik_ai_advisor_slackbot/
 
 # Install dependencies using UV
 RUN uv pip install --system --no-cache -e .
@@ -24,4 +24,4 @@ RUN mkdir -p /app/data && chown -R slackbot:slackbot /app
 USER slackbot
 
 # Run the application
-CMD ["ai-advisor-slackbot"]
+CMD ["kentik-ai-advisor-slackbot"]

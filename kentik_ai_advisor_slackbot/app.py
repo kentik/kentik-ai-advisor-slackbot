@@ -629,6 +629,9 @@ def handle_message(event: Dict[str, Any], client: WebClient):
         event: Slack event data
         client: Slack WebClient
     """
+    logger.info(f"Received message event: {event.get('type')}")
+    logger.debug(f"Full event: {event}")
+
     # Only handle direct messages (DMs)
     channel_type = event.get("channel_type")
     if channel_type != "im":
@@ -640,9 +643,12 @@ def handle_message(event: Dict[str, Any], client: WebClient):
 
     question = event.get("text", "").strip()
     channel_id = event.get("channel")
+    user_id = event.get("user")
 
     if not question:
         return
+
+    logger.info(f"Processing message from user {user_id} in channel {channel_id}")
 
     # Get bot user ID
     try:
