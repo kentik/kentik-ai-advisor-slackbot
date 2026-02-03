@@ -51,7 +51,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("kentik-ai-advisor-slackbot")
 
 
 def get_thread_messages(
@@ -665,8 +665,6 @@ def handle_message(event: Dict[str, Any], client: WebClient):
 def main():
     """Start the Slackbot application."""
     logger.info("Starting AI Advisor Slackbot...")
-    logger.info(f"Bot token: {SLACK_BOT_TOKEN[:15]}... (length: {len(SLACK_BOT_TOKEN)})")
-    logger.info(f"App token: {SLACK_APP_TOKEN[:15]}... (length: {len(SLACK_APP_TOKEN)})")
     logger.info(f"Kentik API URL: {KENTIK_API_URL}")
     logger.info("Connecting to Slack via Socket Mode...")
 

@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 from contextlib import contextmanager
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("kentik-ai-advisor-slackbot")
 
 
 class ConversationStore:

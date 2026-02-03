@@ -52,3 +52,6 @@ Thumbs.db
 
 # UV
 .uv/
+
+# shell
+-sh

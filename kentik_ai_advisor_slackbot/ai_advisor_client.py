@@ -7,9 +7,15 @@ from typing import Dict, Any, Optional
 
 import requests
 
-from . import __version__
+import importlib.metadata
 
-logger = logging.getLogger(__name__)
+try:
+    __version__ = importlib.metadata.version("kentik-ai-advisor-mcp")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "unknown" 
+
+
+logger = logging.getLogger("kentik-ai-advisor-slackbot")
 
 
 class AIAdvisorClient:
