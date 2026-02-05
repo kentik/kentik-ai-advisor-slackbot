@@ -320,10 +320,6 @@ AI Advisor has rate limits:
 
 The bot respects these limits with 2-second polling intervals.
 
-## License
-
-MIT
-
 ## Support
 
 For issues and questions:
