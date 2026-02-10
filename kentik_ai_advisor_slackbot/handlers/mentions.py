@@ -2,7 +2,6 @@ import logging
 import re
 from typing import Any
 
-from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
 from kentik_ai_advisor_slackbot.app import ctx
