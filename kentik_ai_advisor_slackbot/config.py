@@ -13,7 +13,7 @@ def _get_env(key: str, default: str | None = None) -> str:
     value = os.getenv(key, default)
     if value is None:
         return ""
-    return value.strip('\'"')
+    return value.strip("'\"")
 
 
 def _get_env_int(key: str, default: str) -> int:

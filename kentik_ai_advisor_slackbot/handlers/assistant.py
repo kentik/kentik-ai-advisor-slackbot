@@ -17,7 +17,9 @@ async def handle_assistant_thread_started(
 ):
     """Handle assistant thread started event."""
     logger.info("assistant thread started")
-    await say(":wave: Hi! I'm Kentik AI Advisor. I can help you analyze your network data. Ask me anything about your network!")
+    await say(
+        ":wave: Hi! I'm Kentik AI Advisor. I can help you analyze your network data. Ask me anything about your network!"
+    )
 
 
 @ctx.assistant.user_message
@@ -71,7 +73,9 @@ async def handle_assistant_user_message(
         async def on_reasoning(reasoning: str) -> None:
             await set_status(f"Thinking: {reasoning[:100]}...")
 
-        final_response = await poll_ai_advisor_session(ctx.advisor, new_session_id, on_reasoning)
+        final_response = await poll_ai_advisor_session(
+            ctx.advisor, new_session_id, on_reasoning
+        )
         await set_status("")
 
         if not final_response:

@@ -8,7 +8,10 @@ import aiohttp
 
 import importlib.metadata
 
-from kentik_ai_advisor_slackbot.config import POLLING_TIMEOUT_SECONDS, POLLING_INTERVAL_SECONDS
+from kentik_ai_advisor_slackbot.config import (
+    POLLING_TIMEOUT_SECONDS,
+    POLLING_INTERVAL_SECONDS,
+)
 
 try:
     __version__ = importlib.metadata.version("kentik-ai-advisor-mcp")
@@ -122,7 +125,9 @@ class AIAdvisorClient:
         url = f"{self.api_url}{self.base_path}/chat"
         payload = {"id": session_id, "prompt": prompt}
 
-        logger.info(f"updating chat session {session_id} with prompt: {prompt[:100]}...")
+        logger.info(
+            f"updating chat session {session_id} with prompt: {prompt[:100]}..."
+        )
         session = await self._get_session()
         async with session.put(url, json=payload) as response:
             response.raise_for_status()

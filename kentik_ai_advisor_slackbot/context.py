@@ -5,6 +5,7 @@ from slack_bolt.middleware.assistant.async_assistant import AsyncAssistant
 
 from kentik_ai_advisor_slackbot.ai_advisor_client import AIAdvisorClient
 from kentik_ai_advisor_slackbot.conversation_store import ConversationStore
+from kentik_ai_advisor_slackbot.query_engine import QueryEngine
 
 
 @dataclass
@@ -13,3 +14,4 @@ class SlackContext:
     assistant: AsyncAssistant
     advisor: AIAdvisorClient
     store: ConversationStore
+    engine: QueryEngine

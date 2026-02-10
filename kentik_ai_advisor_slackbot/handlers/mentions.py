@@ -5,7 +5,7 @@ from typing import Any
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
-from kentik_ai_advisor_slackbot.app import ctx, handle_ai_advisor_question
+from kentik_ai_advisor_slackbot.app import ctx
 from kentik_ai_advisor_slackbot.slack_messages import post_message
 
 logger = logging.getLogger(__name__)
@@ -54,5 +54,6 @@ async def handle_app_mention(event: dict[str, Any], client: AsyncWebClient):
     if not thread_ts:
         thread_ts = event_ts
 
-    # Handle the question
-    await handle_ai_advisor_question(client, channel_id, thread_ts, question, bot_user_id, event_ts)
+    await ctx.engine.handle_question(
+        client, channel_id, thread_ts, question, bot_user_id, event_ts
+    )

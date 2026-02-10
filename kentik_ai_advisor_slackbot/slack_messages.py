@@ -60,7 +60,7 @@ def get_messages_since_last_bot_reply(
 
     if last_bot_index >= 0 and current_msg_index > last_bot_index:
         user_messages = extract_user_messages(
-            messages[last_bot_index + 1:current_msg_index], bot_user_id
+            messages[last_bot_index + 1 : current_msg_index], bot_user_id
         )
         return user_messages
 
