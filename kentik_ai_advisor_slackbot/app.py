@@ -1,39 +1,36 @@
 """Main Kentik AI Advisor Slackbot application."""
 
 import asyncio
-import os
 import re
-import logging
 from typing import Any
 
-from dotenv import load_dotenv
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
 from .ai_advisor_client import AIAdvisorClient
+from .config import (
+    CONVERSATIONS_DB_PATH,
+    KENTIK_API_EMAIL,
+    KENTIK_API_TOKEN,
+    KENTIK_API_URL,
+    POLLING_INTERVAL_SECONDS,
+    POLLING_TIMEOUT_SECONDS,
+    SLACK_APP_TOKEN,
+    SLACK_BOT_TOKEN,
+    THREAD_CONTEXT_MESSAGES,
+    logger,
+)
 from .conversation_store import ConversationStore
-
-load_dotenv()
-
-# Environment variables
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN").strip('\'"')
-SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN").strip('\'"')
-KENTIK_API_URL = os.getenv("KENTIK_API_URL").strip('\'"')
-KENTIK_API_EMAIL = os.getenv("KENTIK_API_EMAIL").strip('\'"')
-KENTIK_API_TOKEN = os.getenv("KENTIK_API_TOKEN").strip('\'"')
-THREAD_CONTEXT_MESSAGES = int(os.getenv("THREAD_CONTEXT_MESSAGES", "20").strip('\'"'))
-POLLING_TIMEOUT_SECONDS = int(os.getenv("POLLING_TIMEOUT_SECONDS", "120").strip('\'"'))
-POLLING_INTERVAL_SECONDS = int(os.getenv("POLLING_INTERVAL_SECONDS", "2").strip('\'"'))
-CONVERSATIONS_DB_PATH = os.getenv("CONVERSATIONS_DB_PATH", "conversations.db").strip('\'"')
-
-# Validate required environment variables
-if not all([SLACK_BOT_TOKEN, SLACK_APP_TOKEN, KENTIK_API_URL, KENTIK_API_EMAIL, KENTIK_API_TOKEN]):
-    raise EnvironmentError(
-        "Required environment variables: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, "
-        "KENTIK_API_URL, KENTIK_API_EMAIL, KENTIK_API_TOKEN"
-    )
+from .formatting import format_markdown_for_slack
+from .slack_messages import (
+    extract_user_messages,
+    get_messages_since_last_bot_reply,
+    get_thread_messages,
+    post_message,
+    update_message,
+)
 
 # Initialize components
 app = AsyncApp(token=SLACK_BOT_TOKEN)
@@ -45,254 +42,6 @@ ai_advisor = AIAdvisorClient(
     timeout=POLLING_TIMEOUT_SECONDS,
 )
 conversation_store = ConversationStore(db_path=CONVERSATIONS_DB_PATH)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger("kentik-ai-advisor-slackbot")
-
-
-async def get_thread_messages(
-    client: AsyncWebClient, channel_id: str, thread_ts: str, limit: int = 100
-) -> list[dict[str, Any]]:
-    """Retrieve messages from a Slack thread.
-
-    Args:
-        client: Slack AsyncWebClient
-        channel_id: Channel ID
-        thread_ts: Thread timestamp
-        limit: Maximum number of messages to retrieve
-
-    Returns:
-        List of message dictionaries
-    """
-    try:
-        response = await client.conversations_replies(
-            channel=channel_id,
-            ts=thread_ts,
-            limit=limit,
-        )
-        return response.get("messages", [])
-    except SlackApiError as e:
-        logger.error(f"failed to get thread messages: {e.response['error']}")
-        return []
-
-
-def extract_user_messages(
-    messages: list[dict[str, Any]], bot_user_id: str, from_index: int = 0
-) -> list[str]:
-    """Extract user messages (excluding bot messages) from thread.
-
-    Args:
-        messages: List of Slack messages
-        bot_user_id: Bot's user ID to filter out
-        from_index: Start from this message index
-
-    Returns:
-        List of user message texts
-    """
-    user_messages = []
-    for msg in messages[from_index:]:
-        user_id = msg.get("user")
-        text = msg.get("text", "").strip()
-
-        # Skip bot messages and empty messages
-        if user_id == bot_user_id or not text:
-            continue
-
-        # Remove bot mentions from text
-        text = re.sub(r"<@\w+>", "", text).strip()
-        if text:
-            user_messages.append(text)
-
-    return user_messages
-
-
-def get_messages_since_last_bot_reply(
-    messages: list[dict[str, Any]], bot_user_id: str, current_msg_ts: str
-) -> list[str]:
-    """Get all user messages since the last bot reply.
-
-    Args:
-        messages: List of Slack messages in thread
-        bot_user_id: Bot's user ID
-        current_msg_ts: Timestamp of current message (to exclude)
-
-    Returns:
-        List of user message texts since last bot message
-    """
-    # Find the last bot message before the current message
-    last_bot_index = -1
-    current_msg_index = -1
-
-    for i, msg in enumerate(messages):
-        if msg.get("ts") == current_msg_ts:
-            current_msg_index = i
-            break
-        if msg.get("user") == bot_user_id:
-            last_bot_index = i
-
-    # If we found a bot message, get all user messages after it
-    if last_bot_index >= 0 and current_msg_index > last_bot_index:
-        user_messages = extract_user_messages(
-            messages[last_bot_index + 1:current_msg_index], bot_user_id
-        )
-        return user_messages
-
-    return []
-
-
-def get_portal_url() -> str:
-    """Get Kentik portal URL based on API URL.
-
-    Returns:
-        Portal URL (US or EU cluster)
-    """
-    api_url = KENTIK_API_URL.lower()
-    if "kentik.eu" in api_url or ".eu" in api_url:
-        return "https://portal.kentik.eu"
-    else:
-        return "https://portal.kentik.com"
-
-
-def format_markdown_for_slack(markdown: str) -> str:
-    """Convert AI Advisor markdown to Slack mrkdwn format.
-
-    Args:
-        markdown: Markdown text from AI Advisor
-
-    Returns:
-        Slack-formatted text
-    """
-    text = markdown
-
-    # Convert double-star bold to single-star bold (**text** → *text*)
-    # Slack uses single stars for bold, markdown uses double stars
-    text = re.sub(r"\*\*(.*?)\*\*", r"*\1*", text)
-
-    # Convert headers to bold
-    text = re.sub(r"^#### (.*?)$", r"*\1*", text, flags=re.MULTILINE)
-    text = re.sub(r"^### (.*?)$", r"*\1*", text, flags=re.MULTILINE)
-    text = re.sub(r"^## (.*?)$", r"*\1*", text, flags=re.MULTILINE)
-    text = re.sub(r"^# (.*?)$", r"*\1*", text, flags=re.MULTILINE)
-
-    # Convert tables BEFORE converting links (links contain | which confuses table detection)
-    # Detect table and convert to code block
-    lines = text.split("\n")
-    formatted_lines = []
-    in_table = False
-    table_lines = []
-
-    for i, line in enumerate(lines):
-        # Detect table start (line with | and likely a header)
-        # Check if next line is also a table line to confirm
-        is_table_line = "|" in line and line.strip()
-
-        if is_table_line and not in_table:
-            # Start collecting table lines
-            in_table = True
-            table_lines = [line]
-        elif in_table:
-            if "|" in line and line.strip():
-                # Continue collecting table lines
-                table_lines.append(line)
-            else:
-                # End of table, output as code block
-                if table_lines:
-                    formatted_lines.append("```")
-                    formatted_lines.extend(table_lines)
-                    formatted_lines.append("```")
-                    table_lines = []
-                in_table = False
-                # Add the non-table line
-                if line.strip():  # Only add if not empty
-                    formatted_lines.append(line)
-                elif formatted_lines:  # Preserve empty lines between sections
-                    formatted_lines.append(line)
-        else:
-            # Regular line, not in table
-            formatted_lines.append(line)
-
-    # Handle table at end of text
-    if table_lines:
-        formatted_lines.append("```")
-        formatted_lines.extend(table_lines)
-        formatted_lines.append("```")
-
-    text = "\n".join(formatted_lines)
-
-    # NOW convert markdown links to Slack format (after tables are processed)
-    # Get portal URL for link conversion
-    portal_url = get_portal_url()
-
-    # Convert markdown links to Slack format
-    # [text](/v4/path) → <https://portal.kentik.com/v4/path|text>
-    def replace_link(match):
-        link_text = match.group(1)
-        link_path = match.group(2)
-        # Add portal URL if path starts with /v4/
-        if link_path.startswith("/v4/"):
-            full_url = f"{portal_url}{link_path}"
-            return f"<{full_url}|{link_text}>"
-        # For other paths, use as-is
-        elif link_path.startswith("http"):
-            return f"<{link_path}|{link_text}>"
-        else:
-            # Relative path, add portal URL
-            full_url = f"{portal_url}{link_path}"
-            return f"<{full_url}|{link_text}>"
-
-    # Convert [text](url) format
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", replace_link, text)
-
-    return text
-
-
-async def post_message(
-    client: AsyncWebClient, channel: str, text: str, thread_ts: str | None = None
-) -> str | None:
-    """Post a message to Slack.
-
-    Args:
-        client: Slack AsyncWebClient
-        channel: Channel ID
-        text: Message text
-        thread_ts: Optional thread timestamp to reply in thread
-
-    Returns:
-        Message timestamp or None on error
-    """
-    try:
-        response = await client.chat_postMessage(
-            channel=channel,
-            text=text,
-            thread_ts=thread_ts,
-            unfurl_links=False,
-        )
-        return response["ts"]
-    except SlackApiError as e:
-        logger.error(f"failed to post message: {e.response['error']}")
-        return None
-
-
-async def update_message(
-    client: AsyncWebClient, channel: str, ts: str, text: str
-) -> None:
-    """Update an existing Slack message.
-
-    Args:
-        client: Slack AsyncWebClient
-        channel: Channel ID
-        ts: Message timestamp
-        text: New message text
-    """
-    try:
-        await client.chat_update(channel=channel, ts=ts, text=text, unfurl_links=False)
-    except SlackApiError as e:
-        logger.error(f"failed to update message: {e.response['error']}")
 
 
 async def process_ai_advisor_response(
