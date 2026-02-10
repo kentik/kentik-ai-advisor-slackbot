@@ -43,20 +43,11 @@ async def handle_message(event: dict[str, Any], client: AsyncWebClient):
 
     logger.info(f"processing message from user {user_id} in channel {channel_id}")
 
-    # Get bot user ID
-    try:
-        auth_response = await client.auth_test()
-        bot_user_id = auth_response["user_id"]
-    except SlackApiError as e:
-        logger.error(f"failed to get bot user ID: {e.response['error']}")
-        return
-
     # Handle as new conversation (no threading in DMs)
     await ctx.engine.handle_question(
         question=question,
         channel_id=channel_id,
         user_id=user_id,
-        bot_user_id=bot_user_id,
         thread_ts=None,
         event_ts=event.get("ts"),
     )

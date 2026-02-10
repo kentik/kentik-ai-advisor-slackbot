@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Callable, Awaitable, Any
 
+from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
 from kentik_ai_advisor_slackbot.ai_advisor_client import AIAdvisorClient
@@ -35,7 +36,6 @@ class QueryEngine:
         channel_id: str,
         thread_ts: str | None,
         question: str,
-        bot_user_id: str,
         event_ts: str | None = None,
     ) -> None:
         """Handle AI Advisor question from Slack.
@@ -45,12 +45,12 @@ class QueryEngine:
             channel_id: Channel ID
             thread_ts: Thread timestamp (None for main channel)
             question: User question
-            bot_user_id: Bot's user ID
             event_ts: Timestamp of the triggering event (for context gathering)
         """
         # Determine if this is a new conversation or follow-up
         session_id = None
         prompt = question
+        bot_user_id = await self.get_bot_user_id(client)
 
         if thread_ts:
             # Check if this thread has an existing conversation
@@ -316,3 +316,19 @@ class QueryEngine:
             f"session {session_id} timed out after {POLLING_TIMEOUT_SECONDS}s"
         )
         return None
+
+    async def get_bot_user_id(self, client: AsyncWebClient) -> str | None:
+        """Get the bot user ID from Slack.
+
+        Args:
+            client: Slack AsyncWebClient
+
+        Returns:
+            Bot user ID or None on failure
+        """
+        try:
+            auth_response = await client.auth_test()
+            return auth_response["user_id"]
+        except SlackApiError as e:
+            logger.error(f"failed to get bot user ID: {e.response['error']}")
+            return None

@@ -42,18 +42,14 @@ async def handle_app_mention(event: dict[str, Any], client: AsyncWebClient):
         await post_message(client, channel_id, help_text, thread_ts or event_ts)
         return
 
-    # Get bot user ID
-    try:
-        auth_response = await client.auth_test()
-        bot_user_id = auth_response["user_id"]
-    except SlackApiError as e:
-        logger.error(f"failed to get bot user ID: {e.response['error']}")
-        return
-
     # If not in a thread, use event timestamp as the thread parent
     if not thread_ts:
         thread_ts = event_ts
-
+    
     await ctx.engine.handle_question(
-        client, channel_id, thread_ts, question, bot_user_id, event_ts
+        client=client,
+        channel_id=channel_id,
+        thread_ts=thread_ts,
+        question=question,
+        event_ts=event_ts,
     )
