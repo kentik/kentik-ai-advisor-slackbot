@@ -4,7 +4,6 @@ from typing import Any
 from slack_bolt.context.say.async_say import AsyncSay
 from slack_bolt.context.set_status.async_set_status import AsyncSetStatus
 
-from kentik_ai_advisor_slackbot.ai_advisor_client import poll_ai_advisor_session
 from kentik_ai_advisor_slackbot.app import ctx
 from kentik_ai_advisor_slackbot.formatting import format_markdown_for_slack
 
@@ -73,7 +72,7 @@ async def handle_assistant_user_message(
         async def on_reasoning(reasoning: str) -> None:
             await set_status(f"Thinking: {reasoning[:100]}...")
 
-        final_response = await poll_ai_advisor_session(
+        final_response = await ctx.poll_ai_advisor_session(
             ctx.advisor, new_session_id, on_reasoning
         )
         await set_status("")
