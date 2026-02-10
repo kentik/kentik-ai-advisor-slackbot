@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - bv-improvements
   workflow_dispatch:
 
 env:
