@@ -17,6 +17,7 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
+from kentik_ai_advisor_slackbot.context import SlackContext
 from .ai_advisor_client import AIAdvisorClient
 from .config import (
     CONVERSATIONS_DB_PATH,
@@ -50,9 +51,16 @@ ai_advisor = AIAdvisorClient(
     timeout=POLLING_TIMEOUT_SECONDS,
 )
 conversation_store = ConversationStore(db_path=CONVERSATIONS_DB_PATH)
-
-# Initialize Slack Assistant
 assistant = AsyncAssistant()
+
+ctx = SlackContext(
+    app=app,
+    assistant=assistant,
+    advisor=ai_advisor,
+    store=conversation_store
+)
+
+app.use(assistant)
 
 
 async def process_ai_advisor_response(
@@ -326,219 +334,13 @@ async def handle_ai_advisor_question(
         )
 
 
-# =============================================================================
-# Slack Assistant Handlers
-# =============================================================================
-
-
-@assistant.thread_started
-async def handle_assistant_thread_started(
-    say: AsyncSay,
-):
-    """Handle assistant thread started event."""
-    logger.info("assistant thread started")
-    await say(":wave: Hi! I'm Kentik AI Advisor. I can help you analyze your network data. Ask me anything about your network!")
-
-
-@assistant.user_message
-async def handle_assistant_user_message(
-    payload: dict[str, Any],
-    say: AsyncSay,
-    set_status: AsyncSetStatus,
-):
-    """Handle user messages in assistant thread."""
-    logger.info("assistant user message received")
-    logger.debug(f"payload: {payload}")
-
-    channel_id = payload.get("channel")
-    thread_ts = payload.get("thread_ts")
-    question = payload.get("text", "").strip()
-
-    if not question:
-        await say("Please ask a question about your network.")
-        return
-
-    await set_status("Thinking...")
-
-    # Check for existing session in this thread
-    session_id = await conversation_store.get_session_id(thread_ts) if thread_ts else None
-
-    # Build prompt
-    prompt = f"{question}\n\nYou must use only Slack markdown and NO tables in the outputs of this session."
-
-    try:
-        # Create or update session
-        if session_id:
-            logger.info(f"continuing assistant session {session_id}")
-            await ai_advisor.update_chat_session(session_id, prompt)
-            new_session_id = session_id
-        else:
-            logger.info("creating new assistant session")
-            response = await ai_advisor.create_chat_session(prompt)
-            new_session_id = response.get("id")
-
-        if not new_session_id:
-            logger.error("no session ID returned from AI Advisor")
-            await set_status("")
-            await say("Failed to create AI Advisor session. Please try again later.")
-            return
-
-        # Save conversation mapping
-        if thread_ts:
-            await conversation_store.save_conversation(thread_ts, channel_id, new_session_id)
-
-        # Poll with reasoning updates
-        async def on_reasoning(reasoning: str) -> None:
-            await set_status(f"Thinking: {reasoning[:100]}...")
-
-        final_response = await poll_ai_advisor_session(new_session_id, on_reasoning)
-        await set_status("")
-
-        if not final_response:
-            await say("AI Advisor request timed out. Please try again later.")
-            return
-
-        # Process response
-        status = final_response.get("status")
-        messages = final_response.get("messages", [])
-
-        if status == "SESSION_STATUS_COMPLETED":
-            if messages:
-                latest_message = messages[-1]
-                final_answer = latest_message.get("finalAnswer", "")
-                error_message = latest_message.get("errorMessage", "")
-
-                if final_answer:
-                    await say(format_markdown_for_slack(final_answer))
-                elif error_message:
-                    await say(f"AI Advisor encountered an error: {error_message}")
-                else:
-                    await say("AI Advisor completed but returned no answer.")
-            else:
-                await say("AI Advisor completed but returned no messages.")
-
-        elif status == "SESSION_STATUS_FAILED":
-            error_msg = "AI Advisor request failed."
-            if messages:
-                error_message = messages[-1].get("errorMessage", "")
-                if error_message:
-                    error_msg = f"AI Advisor failed: {error_message}"
-            await say(error_msg)
-
-    except Exception as e:
-        logger.error(f"error in assistant handler: {e}")
-        await set_status("")
-        await say("Failed to get response from AI Advisor. Please try again later.")
-
-
-# Register assistant with the app
-app.use(assistant)
-
-
-# =============================================================================
-# Standard Event Handlers
-# =============================================================================
-
-
-@app.event("app_mention")
-async def handle_app_mention(event: dict[str, Any], client: AsyncWebClient):
-    """Handle @mentions of the bot.
-
-    Args:
-        event: Slack event data
-        client: Slack AsyncWebClient
-    """
-    logger.info(f"received app_mention event: {event.get('type')}")
-    logger.debug(f"full event: {event}")
-
-    text = event.get("text", "").strip()
-    user_id = event.get("user")
-    channel_id = event.get("channel")
-    thread_ts = event.get("thread_ts")  # None if in main channel
-    event_ts = event.get("ts")
-
-    logger.info(f"processing mention from user {user_id} in channel {channel_id}")
-
-    # Remove bot mention from text
-    question = re.sub(r"<@\w+>", "", text).strip()
-
-    if not question:
-        help_text = (
-            "Hello! I'm the Kentik AI Advisor bot. "
-            "Mention me with a question about your network and I'll help you analyze it.\n\n"
-            "Example: `@kentik show me top talkers in the last hour`"
-        )
-        await post_message(client, channel_id, help_text, thread_ts or event_ts)
-        return
-
-    # Get bot user ID
-    try:
-        auth_response = await client.auth_test()
-        bot_user_id = auth_response["user_id"]
-    except SlackApiError as e:
-        logger.error(f"failed to get bot user ID: {e.response['error']}")
-        return
-
-    # If not in a thread, use event timestamp as the thread parent
-    if not thread_ts:
-        thread_ts = event_ts
-
-    # Handle the question
-    await handle_ai_advisor_question(client, channel_id, thread_ts, question, bot_user_id, event_ts)
-
-
-@app.event("message")
-async def handle_message(event: dict[str, Any], client: AsyncWebClient):
-    """Handle direct messages to the bot.
-
-    Args:
-        event: Slack event data
-        client: Slack AsyncWebClient
-    """
-    logger.info(f"received message event: {event.get('type')}")
-    logger.debug(f"full event: {event}")
-    
-    if "thread_ts" in event:
-        # Ignore threaded messages here, they are handled by the assistant
-        logger.info("ignore message in thread, handled by assistant")
-        return
-
-    # Only handle direct messages (DMs)
-    channel_type = event.get("channel_type")
-    if channel_type != "im":
-        return
-
-    # Ignore bot messages
-    if event.get("subtype") == "bot_message":
-        return
-
-    question = event.get("text", "").strip()
-    channel_id = event.get("channel")
-    user_id = event.get("user")
-    
-
-    if not question:
-        return
-
-    logger.info(f"processing message from user {user_id} in channel {channel_id}")
-
-    # Get bot user ID
-    try:
-        auth_response = await client.auth_test()
-        bot_user_id = auth_response["user_id"]
-    except SlackApiError as e:
-        logger.error(f"failed to get bot user ID: {e.response['error']}")
-        return
-
-    # Handle as new conversation (no threading in DMs)
-    await handle_ai_advisor_question(client, channel_id, None, question, bot_user_id, event.get("ts"))
-
-
 async def async_main():
     """Start the Slackbot application (async)."""
     logger.info("starting AI Advisor Slackbot...")
     logger.info(f"Kentik API URL: {KENTIK_API_URL}")
     logger.info("connecting to Slack via Socket Mode...")
+    
+    from kentik_ai_advisor_slackbot import handlers  # noqa: F401 - register handlers
 
     try:
         handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)

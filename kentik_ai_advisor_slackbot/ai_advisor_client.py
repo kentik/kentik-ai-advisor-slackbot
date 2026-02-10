@@ -2,11 +2,13 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 import aiohttp
 
 import importlib.metadata
+
+from kentik_ai_advisor_slackbot.config import POLLING_TIMEOUT_SECONDS, POLLING_INTERVAL_SECONDS
 
 try:
     __version__ = importlib.metadata.version("kentik-ai-advisor-mcp")
@@ -191,3 +193,57 @@ class AIAdvisorClient:
         except aiohttp.ClientError as e:
             logger.error(f"API request failed: {e}")
             return None
+
+
+async def poll_ai_advisor_session(
+    client: AIAdvisorClient,
+    session_id: str,
+    on_reasoning: Callable[[str], Awaitable[None]] | None = None,
+) -> dict[str, Any] | None:
+    """Poll AI Advisor session until completion.
+
+    Args:
+        session_id: AI Advisor session ID
+        on_reasoning: Optional async callback for reasoning updates
+
+    Returns:
+        Completed session data or None on timeout
+    """
+    elapsed = 0
+    last_reasoning = ""
+
+    logger.info(f"polling for completion of session {session_id}...")
+
+    while elapsed < POLLING_TIMEOUT_SECONDS:
+        try:
+            response = await client.get_chat_session(session_id)
+            status = response.get("status")
+            messages = response.get("messages", [])
+
+            logger.debug(f"session {session_id} status: {status}")
+
+            # Check for reasoning updates
+            if on_reasoning and messages:
+                latest_message = messages[-1]
+                current_reasoning = latest_message.get("reasoning", "").strip()
+
+                if current_reasoning and current_reasoning != last_reasoning:
+                    last_reasoning = current_reasoning
+                    await on_reasoning(current_reasoning)
+                    logger.debug(f"updated reasoning: {current_reasoning[:100]}...")
+
+            if status == "SESSION_STATUS_COMPLETED":
+                logger.info(f"session {session_id} completed successfully")
+                return response
+            elif status == "SESSION_STATUS_FAILED":
+                logger.error(f"session {session_id} failed")
+                return response
+
+        except Exception as e:
+            logger.error(f"error polling session: {e}")
+
+        await asyncio.sleep(POLLING_INTERVAL_SECONDS)
+        elapsed += POLLING_INTERVAL_SECONDS
+
+    logger.warning(f"session {session_id} timed out after {POLLING_TIMEOUT_SECONDS}s")
+    return None
