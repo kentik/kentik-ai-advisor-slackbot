@@ -5,6 +5,7 @@ A Slack bot application that enables seamless communication between Slack users 
 ## Features
 
 - **Natural Interaction**: Use `@kentik` mentions in channels or send direct messages
+- **Slack Assistant Mode**: Access AI Advisor through Slack's native assistant panel
 - **Thread-based Conversations**: Responses appear in threads, maintaining conversation context
 - **Conversation Continuity**: Follow-up questions in threads continue the same AI Advisor session
 - **Context-Aware**: When starting a conversation in an existing thread, includes context from previous messages
@@ -65,6 +66,15 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
+  assistant_view:
+    assistant_description: Ask questions about your Kentik network data
+    suggested_prompts:
+      - title: Top Talkers
+        message: Show me the top talkers in the last hour
+      - title: Traffic Overview
+        message: Give me an overview of my network traffic
+      - title: Anomalies
+        message: Are there any anomalies in my network?
   bot_user:
     display_name: Kentik AI Advisor
     always_online: true
@@ -84,6 +94,8 @@ settings:
     bot_events:
       - app_mention
       - message.im
+      - assistant_thread_started
+      - assistant_thread_context_changed
   interactivity:
     is_enabled: true
   org_deploy_enabled: false
@@ -219,6 +231,12 @@ docker run -d --restart unless-stopped \
 - User sends DM to bot
 - Treated as new conversation
 - No threading (DMs don't support threads)
+
+#### 5. Assistant Mode
+- User opens Kentik AI Advisor from Slack's assistant panel
+- Suggested prompts help users get started
+- Conversations persist across sessions using thread timestamps
+- Full AI Advisor capabilities available through the native assistant UI
 
 ### Thread and Session Management
 

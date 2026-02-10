@@ -2,9 +2,17 @@
 
 import asyncio
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from slack_bolt.async_app import AsyncApp
+from slack_bolt.async_app import (
+    AsyncApp,
+    AsyncAssistant,
+    AsyncSay,
+    AsyncSetStatus,
+    AsyncSetSuggestedPrompts,
+    AsyncSetTitle,
+)
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
@@ -42,6 +50,9 @@ ai_advisor = AIAdvisorClient(
     timeout=POLLING_TIMEOUT_SECONDS,
 )
 conversation_store = ConversationStore(db_path=CONVERSATIONS_DB_PATH)
+
+# Initialize Slack Assistant
+assistant = AsyncAssistant()
 
 
 async def process_ai_advisor_response(
@@ -110,28 +121,23 @@ async def process_ai_advisor_response(
         )
 
 
-async def poll_with_reasoning_updates(
-    client: AsyncWebClient,
-    channel_id: str,
-    status_ts: str,
+async def poll_ai_advisor_session(
     session_id: str,
+    on_reasoning: Callable[[str], Awaitable[None]] | None = None,
 ) -> dict[str, Any] | None:
-    """Poll AI Advisor with live reasoning updates.
+    """Poll AI Advisor session until completion.
 
     Args:
-        client: Slack AsyncWebClient
-        channel_id: Channel ID
-        status_ts: Message timestamp to update
         session_id: AI Advisor session ID
+        on_reasoning: Optional async callback for reasoning updates
 
     Returns:
         Completed session data or None on timeout
     """
     elapsed = 0
     last_reasoning = ""
-    update_interval = POLLING_INTERVAL_SECONDS
 
-    logger.info(f"polling for completion of session {session_id} with reasoning updates...")
+    logger.info(f"polling for completion of session {session_id}...")
 
     while elapsed < POLLING_TIMEOUT_SECONDS:
         try:
@@ -142,18 +148,15 @@ async def poll_with_reasoning_updates(
             logger.debug(f"session {session_id} status: {status}")
 
             # Check for reasoning updates
-            if messages:
+            if on_reasoning and messages:
                 latest_message = messages[-1]
                 current_reasoning = latest_message.get("reasoning", "").strip()
 
-                # Update message if reasoning has changed
                 if current_reasoning and current_reasoning != last_reasoning:
                     last_reasoning = current_reasoning
-                    reasoning_text = f"_Thinking..._\n\n{current_reasoning}"
-                    await update_message(client, channel_id, status_ts, reasoning_text)
+                    await on_reasoning(current_reasoning)
                     logger.debug(f"updated reasoning: {current_reasoning[:100]}...")
 
-            # Check if completed
             if status == "SESSION_STATUS_COMPLETED":
                 logger.info(f"session {session_id} completed successfully")
                 return response
@@ -164,8 +167,8 @@ async def poll_with_reasoning_updates(
         except Exception as e:
             logger.error(f"error polling session: {e}")
 
-        await asyncio.sleep(update_interval)
-        elapsed += update_interval
+        await asyncio.sleep(POLLING_INTERVAL_SECONDS)
+        elapsed += POLLING_INTERVAL_SECONDS
 
     logger.warning(f"session {session_id} timed out after {POLLING_TIMEOUT_SECONDS}s")
     return None
@@ -295,9 +298,10 @@ async def handle_ai_advisor_question(
             await conversation_store.save_conversation(thread_ts, channel_id, new_session_id)
 
         # Poll with reasoning updates
-        final_response = await poll_with_reasoning_updates(
-            client, channel_id, status_ts, new_session_id
-        )
+        async def on_reasoning(reasoning: str) -> None:
+            await update_message(client, channel_id, status_ts, f"_Thinking..._\n\n{reasoning}")
+
+        final_response = await poll_ai_advisor_session(new_session_id, on_reasoning)
 
         if final_response:
             # Process and post final response
@@ -320,6 +324,120 @@ async def handle_ai_advisor_question(
             status_ts,
             "Failed to get response from AI Advisor. Please try again later.",
         )
+
+
+# =============================================================================
+# Slack Assistant Handlers
+# =============================================================================
+
+
+@assistant.thread_started
+async def handle_assistant_thread_started(
+    say: AsyncSay,
+):
+    """Handle assistant thread started event."""
+    logger.info("assistant thread started")
+    await say(":wave: Hi! I'm Kentik AI Advisor. I can help you analyze your network data. Ask me anything about your network!")
+
+
+@assistant.user_message
+async def handle_assistant_user_message(
+    payload: dict[str, Any],
+    say: AsyncSay,
+    set_status: AsyncSetStatus,
+):
+    """Handle user messages in assistant thread."""
+    logger.info("assistant user message received")
+    logger.debug(f"payload: {payload}")
+
+    channel_id = payload.get("channel")
+    thread_ts = payload.get("thread_ts")
+    question = payload.get("text", "").strip()
+
+    if not question:
+        await say("Please ask a question about your network.")
+        return
+
+    await set_status("Thinking...")
+
+    # Check for existing session in this thread
+    session_id = await conversation_store.get_session_id(thread_ts) if thread_ts else None
+
+    # Build prompt
+    prompt = f"{question}\n\nYou must use only Slack markdown and NO tables in the outputs of this session."
+
+    try:
+        # Create or update session
+        if session_id:
+            logger.info(f"continuing assistant session {session_id}")
+            await ai_advisor.update_chat_session(session_id, prompt)
+            new_session_id = session_id
+        else:
+            logger.info("creating new assistant session")
+            response = await ai_advisor.create_chat_session(prompt)
+            new_session_id = response.get("id")
+
+        if not new_session_id:
+            logger.error("no session ID returned from AI Advisor")
+            await set_status("")
+            await say("Failed to create AI Advisor session. Please try again later.")
+            return
+
+        # Save conversation mapping
+        if thread_ts:
+            await conversation_store.save_conversation(thread_ts, channel_id, new_session_id)
+
+        # Poll with reasoning updates
+        async def on_reasoning(reasoning: str) -> None:
+            await set_status(f"Thinking: {reasoning[:100]}...")
+
+        final_response = await poll_ai_advisor_session(new_session_id, on_reasoning)
+        await set_status("")
+
+        if not final_response:
+            await say("AI Advisor request timed out. Please try again later.")
+            return
+
+        # Process response
+        status = final_response.get("status")
+        messages = final_response.get("messages", [])
+
+        if status == "SESSION_STATUS_COMPLETED":
+            if messages:
+                latest_message = messages[-1]
+                final_answer = latest_message.get("finalAnswer", "")
+                error_message = latest_message.get("errorMessage", "")
+
+                if final_answer:
+                    await say(format_markdown_for_slack(final_answer))
+                elif error_message:
+                    await say(f"AI Advisor encountered an error: {error_message}")
+                else:
+                    await say("AI Advisor completed but returned no answer.")
+            else:
+                await say("AI Advisor completed but returned no messages.")
+
+        elif status == "SESSION_STATUS_FAILED":
+            error_msg = "AI Advisor request failed."
+            if messages:
+                error_message = messages[-1].get("errorMessage", "")
+                if error_message:
+                    error_msg = f"AI Advisor failed: {error_message}"
+            await say(error_msg)
+
+    except Exception as e:
+        logger.error(f"error in assistant handler: {e}")
+        await set_status("")
+        await say("Failed to get response from AI Advisor. Please try again later.")
+
+
+# Register assistant with the app
+app.use(assistant)
+
+
+# =============================================================================
+# Standard Event Handlers
+# =============================================================================
 
 
 @app.event("app_mention")
@@ -379,6 +497,11 @@ async def handle_message(event: dict[str, Any], client: AsyncWebClient):
     """
     logger.info(f"received message event: {event.get('type')}")
     logger.debug(f"full event: {event}")
+    
+    if "thread_ts" in event:
+        # Ignore threaded messages here, they are handled by the assistant
+        logger.info("ignore message in thread, handled by assistant")
+        return
 
     # Only handle direct messages (DMs)
     channel_type = event.get("channel_type")
@@ -392,6 +515,7 @@ async def handle_message(event: dict[str, Any], client: AsyncWebClient):
     question = event.get("text", "").strip()
     channel_id = event.get("channel")
     user_id = event.get("user")
+    
 
     if not question:
         return
@@ -422,6 +546,7 @@ async def async_main():
         logger.info("✓ Bot is now listening for events...")
         logger.info("  - Listening for @mentions in channels")
         logger.info("  - Listening for direct messages")
+        logger.info("  - Listening for assistant threads")
         await handler.start_async()
     except Exception as e:
         logger.error(f"failed to start bot: {e}")
