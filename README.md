@@ -178,12 +178,8 @@ uv run kentik-ai-advisor-slackbot
 
 ### Running with Docker
 
-1. Build the Docker image:
-```bash
-docker build -t kentik-ai-advisor-slackbot .
-```
 
-2. Run the container:
+1Run the container:
 ```bash
 docker run -d --restart unless-stopped \
   --name kentik-ai-advisor-slackbot \
@@ -192,7 +188,7 @@ docker run -d --restart unless-stopped \
   -e KENTIK_API_URL='https://grpc.api.kentik.com' \
   -e KENTIK_API_EMAIL='your-email@company.com' \
   -e KENTIK_API_TOKEN='your-api-token' \
-  kentik-ai-advisor-slackbot:latest
+  kentik/ai-advisor-slackbot:latest
 ```
 
 Or use a `.env` file:
@@ -201,7 +197,7 @@ docker run -d --restart unless-stopped \
   --name kentik-ai-advisor-slackbot \
   --env-file .env \
   -v $(pwd)/conversations.db:/app/conversations.db \
-  kentik-ai-advisor-slackbot:latest
+  kentik/ai-advisor-slackbot:latest
 ```
 
 ## How It Works
@@ -261,22 +257,6 @@ The bot handles AI Advisor's asynchronous pattern:
 6. Post to Slack
 
 ## Development
-
-### Project Structure
-
-```
-kentik-ai-advisor-slackbot/
-├── kentik_ai_advisor_slackbot/
-│   ├── __init__.py
-│   ├── app.py                    # Main Slack bot logic
-│   ├── ai_advisor_client.py       # AI Advisor API client
-│   └── conversation_store.py      # SQLite database layer
-├── .env.example
-├── .gitignore
-├── Dockerfile
-├── pyproject.toml
-└── README.md
-```
 
 ## Troubleshooting
 
