@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: kentik-ai-advisor-slackbot
+  IMAGE_NAME: ai-advisor-slackbot
 
 jobs:
   build-and-push:
@@ -27,7 +27,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          username: kentik
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
       - name: Extract metadata for Docker
