@@ -58,7 +58,7 @@ pip install -e .
 
 ```yaml
 display_information:
-  name: Kentik AI Advisor
+  name: Kentik
   description: AI-powered network analysis assistant
   background_color: "#333436"
 features:
@@ -67,16 +67,9 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   assistant_view:
-    assistant_description: Ask questions about your Kentik network data
-    suggested_prompts:
-      - title: Top Talkers
-        message: Show me the top talkers in the last hour
-      - title: Traffic Overview
-        message: Give me an overview of my network traffic
-      - title: Anomalies
-        message: Are there any anomalies in my network?
+    assistant_description: Ask questions about your network using Kentik's AI Advisor
   bot_user:
-    display_name: Kentik AI Advisor
+    display_name: kentik
     always_online: true
 oauth_config:
   scopes:
