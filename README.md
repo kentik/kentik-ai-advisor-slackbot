@@ -5,6 +5,7 @@ A Slack bot application that enables seamless communication between Slack users 
 ## Features
 
 - **Natural Interaction**: Use `@kentik` mentions in channels or send direct messages
+- **Slack Assistant Mode**: Access AI Advisor through Slack's native assistant panel
 - **Thread-based Conversations**: Responses appear in threads, maintaining conversation context
 - **Conversation Continuity**: Follow-up questions in threads continue the same AI Advisor session
 - **Context-Aware**: When starting a conversation in an existing thread, includes context from previous messages
@@ -38,7 +39,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```bash
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e .
+uv sync --all-extras
 ```
 
 ### Using pip
@@ -52,62 +53,12 @@ pip install -e .
 ### 1. Create Slack App
 
 1. Go to [Slack API](https://api.slack.com/apps) and click "Create New App"
-2. Choose "From scratch"
-3. Enter app name (e.g., "Kentik AI Advisor") and select your workspace
-4. Click "Create App"
-
-### 2. Enable Socket Mode
-
-1. Navigate to "Settings → Socket Mode"
-2. Enable Socket Mode
-3. Generate an app-level token with `connections:write` scope
-4. Save the token as `SLACK_APP_TOKEN` in your `.env` file
-
-### 3. Configure Bot User
-
-1. Go to "Features → App Home"
-2. Configure:
-   - Display Name: "Kentik AI Advisor"
-   - Default Username: "kentik"
-   - Enable "Always Show My Bot as Online"
-3. Under "Show Tabs":
-   - Disable "Home Tab"
-   - Enable "Messages Tab"
-   - Check "Allow users to send Slash commands and messages from the messages tab"
-
-### 4. Add Bot Scopes
-
-Navigate to "Features → OAuth & Permissions" and add these Bot Token Scopes:
-
-- `app_mentions:read` - Listen for @mentions
-- `channels:history` - Read channel messages
-- `channels:read` - View basic channel info
-- `chat:write` - Send messages
-- `im:history` - Read DM messages
-- `im:read` - View DM info
-- `im:write` - Send DMs
-
-### 5. Subscribe to Events
-
-Go to "Features → Event Subscriptions" and enable events. Subscribe to these bot events:
-
-- `app_mention` - When bot is mentioned
-- `message.im` - Direct messages to bot
-
-### 6. Install App to Workspace
-
-1. Go to "Settings → Install App"
-2. Click "Install to Workspace"
-3. Authorize the app
-4. Copy the "Bot User OAuth Token" as `SLACK_BOT_TOKEN` for your `.env` file
-
-### Example App Manifest
-
-You can also use this manifest to configure your app:
+2. Choose "From manifest"
+3. Paste the example manifest from below and create the app
 
 ```yaml
 display_information:
-  name: Kentik AI Advisor
+  name: Kentik
   description: AI-powered network analysis assistant
   background_color: "#333436"
 features:
@@ -115,8 +66,10 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
+  assistant_view:
+    assistant_description: Ask questions about your network using Kentik's AI Advisor
   bot_user:
-    display_name: Kentik AI Advisor
+    display_name: kentik
     always_online: true
 oauth_config:
   scopes:
@@ -128,15 +81,36 @@ oauth_config:
       - im:history
       - im:read
       - im:write
+      - assistant:write
 settings:
   event_subscriptions:
     bot_events:
       - app_mention
       - message.im
+      - assistant_thread_started
+      - assistant_thread_context_changed
+  interactivity:
+    is_enabled: true
   org_deploy_enabled: false
   socket_mode_enabled: true
   token_rotation_enabled: false
 ```
+
+### 2. Install App to Workspace
+
+1. Go to "Settings → Install App"
+2. Click "Install to Workspace"
+3. Authorize the app
+4. Copy the "Bot User OAuth Token" as `SLACK_BOT_TOKEN` for your `.env` file. See Configuration section for details.
+
+#### 3. Create App-Level Token
+
+1. Go to "Settings → Basic Information"
+2. Scroll down to "App-Level Tokens"
+3. Click "Generate Token and Scopes"
+4. Add `connections:write` scope
+5. Copy the generated token as `SLACK_APP_TOKEN` for your `.env` file. See Configuration section for details.
+
 
 ## Configuration
 
@@ -166,7 +140,7 @@ POLLING_TIMEOUT_SECONDS=120
 CONVERSATIONS_DB_PATH=conversations.db
 ```
 
-### Getting Kentik API Credentials
+### Getting Kentik API Credentials (If you don't have them)
 
 1. Log into [Kentik Portal](https://portal.kentik.com)
 2. Click your profile (top-right)
@@ -197,12 +171,8 @@ uv run kentik-ai-advisor-slackbot
 
 ### Running with Docker
 
-1. Build the Docker image:
-```bash
-docker build -t kentik-ai-advisor-slackbot .
-```
 
-2. Run the container:
+1Run the container:
 ```bash
 docker run -d --restart unless-stopped \
   --name kentik-ai-advisor-slackbot \
@@ -211,7 +181,7 @@ docker run -d --restart unless-stopped \
   -e KENTIK_API_URL='https://grpc.api.kentik.com' \
   -e KENTIK_API_EMAIL='your-email@company.com' \
   -e KENTIK_API_TOKEN='your-api-token' \
-  kentik-ai-advisor-slackbot:latest
+  kentik/ai-advisor-slackbot:latest
 ```
 
 Or use a `.env` file:
@@ -220,7 +190,7 @@ docker run -d --restart unless-stopped \
   --name kentik-ai-advisor-slackbot \
   --env-file .env \
   -v $(pwd)/conversations.db:/app/conversations.db \
-  kentik-ai-advisor-slackbot:latest
+  kentik/ai-advisor-slackbot:latest
 ```
 
 ## How It Works
@@ -251,6 +221,12 @@ docker run -d --restart unless-stopped \
 - Treated as new conversation
 - No threading (DMs don't support threads)
 
+#### 5. Assistant Mode
+- User opens Kentik AI Advisor from Slack's assistant panel
+- Suggested prompts help users get started
+- Conversations persist across sessions using thread timestamps
+- Full AI Advisor capabilities available through the native assistant UI
+
 ### Thread and Session Management
 
 The bot maintains a SQLite database (`conversations.db`) that maps:
@@ -274,22 +250,6 @@ The bot handles AI Advisor's asynchronous pattern:
 6. Post to Slack
 
 ## Development
-
-### Project Structure
-
-```
-kentik-ai-advisor-slackbot/
-├── kentik_ai_advisor_slackbot/
-│   ├── __init__.py
-│   ├── app.py                    # Main Slack bot logic
-│   ├── ai_advisor_client.py       # AI Advisor API client
-│   └── conversation_store.py      # SQLite database layer
-├── .env.example
-├── .gitignore
-├── Dockerfile
-├── pyproject.toml
-└── README.md
-```
 
 ## Troubleshooting
 
