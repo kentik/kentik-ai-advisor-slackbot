@@ -112,7 +112,7 @@ class QueryEngine:
             logger.info(f"new conversation in channel {channel_id}")
 
         # Add Slack markdown instruction to prompt
-        prompt = f"{prompt}\n\nYou must use only Slack markdown and NO tables in the outputs of this session."
+        prompt = f"{prompt}\n\nThe answer must not use tables or mermaid diagrams."
 
         # Post initial status message
         if thread_ts:
@@ -279,6 +279,7 @@ class QueryEngine:
         elapsed = 0
         last_reasoning = ""
 
+        await asyncio.sleep(POLLING_INTERVAL_SECONDS)
         logger.info(f"polling for completion of session {session_id}...")
 
         while elapsed < POLLING_TIMEOUT_SECONDS:

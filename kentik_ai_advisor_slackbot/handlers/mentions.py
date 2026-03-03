@@ -9,6 +9,9 @@ from kentik_ai_advisor_slackbot.slack_messages import post_message
 
 logger = logging.getLogger(__name__)
 
+@ctx.app.event("reaction_added")
+async def handle_reaction_added_events(event: dict[str, Any], client: AsyncWebClient):
+    logger.info(event)
 
 @ctx.app.event("app_mention")
 async def handle_app_mention(event: dict[str, Any], client: AsyncWebClient):

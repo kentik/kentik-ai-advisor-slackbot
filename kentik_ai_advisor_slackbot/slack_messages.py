@@ -133,7 +133,20 @@ async def update_message(
         ts: Message timestamp
         text: New message text
     """
+    blocks = [
+        {"type": "markdown", "text": text},
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "plain_text",
+                    "text": "This tool uses AI to generate responses, so some information may be inaccurate.",
+                }
+            ],
+        }
+    ]
+
     try:
-        await client.chat_update(channel=channel, ts=ts, text=text, unfurl_links=False)
+        await client.chat_update(channel=channel, ts=ts, blocks=blocks, unfurl_links=False)
     except SlackApiError as e:
         logger.error(f"failed to update message: {e.response['error']}")
