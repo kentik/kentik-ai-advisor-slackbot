@@ -279,7 +279,9 @@ class QueryEngine:
         elapsed = 0
         last_reasoning = ""
 
-        await asyncio.sleep(POLLING_INTERVAL_SECONDS)
+        # wait initially 2 polling periods, before start polling
+        # as answer normally does not get out so fast
+        await asyncio.sleep(2 * POLLING_INTERVAL_SECONDS)
         logger.info(f"polling for completion of session {session_id}...")
 
         while elapsed < POLLING_TIMEOUT_SECONDS:
