@@ -42,12 +42,6 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv sync --all-extras
 ```
 
-### Using pip
-
-```bash
-pip install -e .
-```
-
 ## Slack App Configuration
 
 ### 1. Create Slack App
@@ -172,7 +166,7 @@ uv run kentik-ai-advisor-slackbot
 ### Running with Docker
 
 
-1Run the container:
+Run the container:
 ```bash
 docker run -d --restart unless-stopped \
   --name kentik-ai-advisor-slackbot \
