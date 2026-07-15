@@ -112,7 +112,10 @@ class QueryEngine:
             logger.info(f"new conversation in channel {channel_id}")
 
         # Add Slack markdown instruction to prompt
-        prompt = f"{prompt}\n\nThe answer must not use tables or mermaid diagrams."
+        prompt = (
+            f"{prompt}\n\nThe answer must not use tables or mermaid diagrams. "
+            f"Do not let the answer exceed 12000 characters."
+        )
 
         # Post initial status message
         if thread_ts:
