@@ -204,6 +204,51 @@ docker run -d --restart unless-stopped \
   kentik/ai-advisor-slackbot:latest
 ```
 
+### Running as a systemd Service (Linux)
+
+If you're running from source rather than the Docker image (e.g. to pick up
+changes before they're published to Docker Hub), use the provided systemd
+unit at [`deploy/systemd/kentik-ai-advisor-slackbot.service`](deploy/systemd/kentik-ai-advisor-slackbot.service).
+
+1. Create a dedicated user and install location:
+```bash
+sudo useradd -m -s /usr/sbin/nologin slackbot
+sudo git clone <repository-url> /opt/kentik-ai-advisor-slackbot
+cd /opt/kentik-ai-advisor-slackbot
+sudo cp .env.example .env  # then fill in your credentials
+sudo chown -R slackbot:slackbot /opt/kentik-ai-advisor-slackbot
+```
+
+2. Install dependencies as the service user:
+```bash
+sudo -u slackbot uv sync --all-extras --directory /opt/kentik-ai-advisor-slackbot
+```
+
+3. Install and start the service:
+```bash
+sudo cp deploy/systemd/kentik-ai-advisor-slackbot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now kentik-ai-advisor-slackbot
+```
+
+4. Check status and logs:
+```bash
+sudo systemctl status kentik-ai-advisor-slackbot
+sudo journalctl -u kentik-ai-advisor-slackbot -f
+```
+
+To deploy an update:
+```bash
+cd /opt/kentik-ai-advisor-slackbot
+sudo -u slackbot git pull
+sudo -u slackbot uv sync --all-extras
+sudo systemctl restart kentik-ai-advisor-slackbot
+```
+
+> The unit file assumes `uv` is installed system-wide at `/usr/local/bin/uv`
+> and the repo lives at `/opt/kentik-ai-advisor-slackbot`. Adjust
+> `ExecStart`/`WorkingDirectory` if your paths differ.
+
 ## How It Works
 
 ### Conversation Flow
