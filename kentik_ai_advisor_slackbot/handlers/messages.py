@@ -44,9 +44,9 @@ async def handle_message(event: dict[str, Any], client: AsyncWebClient):
 
     # Handle as new conversation (no threading in DMs)
     await ctx.engine.handle_question(
-        question=question,
+        client=client,
         channel_id=channel_id,
-        user_id=user_id,
         thread_ts=None,
+        question=question,
         event_ts=event.get("ts"),
     )
