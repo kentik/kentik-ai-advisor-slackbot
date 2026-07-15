@@ -9,16 +9,40 @@ from kentik_ai_advisor_slackbot.app import ctx
 
 logger = logging.getLogger(__file__)
 
+SUGGESTED_PROMPTS = [
+    {
+        "title": "Show top talkers",
+        "message": "Show me the top talkers on my network in the last hour",
+    },
+    {
+        "title": "Investigate an anomaly",
+        "message": "Are there any unusual traffic patterns I should know about?",
+    },
+]
 
-@ctx.assistant.thread_started
-async def handle_assistant_thread_started(
-    say: AsyncSay,
-):
-    """Handle assistant thread started event."""
-    logger.info("assistant thread started")
-    await say(
-        ":wave: Hi! I'm Kentik AI Advisor. I can help you analyze your network data. Ask me anything about your network!"
-    )
+
+@ctx.app.event("app_home_opened")
+async def handle_app_home_opened(event: dict[str, Any], client: AsyncWebClient):
+    """Show suggested prompts when a user opens a DM with the bot.
+
+    Slack's Agent messaging experience (see
+    https://docs.slack.dev/changelog/2026/06/30/agent-messages-tab) replaced
+    `assistant_thread_started` with `app_home_opened` as the way to detect
+    that a user has actively opened a DM/Messages tab conversation.
+    """
+    if event.get("tab") != "messages":
+        return
+
+    logger.info("messages tab opened, setting suggested prompts")
+
+    try:
+        await client.assistant_threads_setSuggestedPrompts(
+            channel_id=event["channel"],
+            title="Ask Kentik AI Advisor",
+            prompts=SUGGESTED_PROMPTS,
+        )
+    except Exception as e:
+        logger.error(f"failed to set suggested prompts: {e}")
 
 
 @ctx.assistant.user_message
