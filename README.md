@@ -76,6 +76,8 @@ oauth_config:
       - im:read
       - im:write
       - assistant:write
+      - users:read
+      - users:read.email
 settings:
   event_subscriptions:
     bot_events:
@@ -210,7 +212,14 @@ If you're running from source rather than the Docker image (e.g. to pick up
 changes before they're published to Docker Hub), use the provided systemd
 unit at [`deploy/systemd/kentik-ai-advisor-slackbot.service`](deploy/systemd/kentik-ai-advisor-slackbot.service).
 
-1. Create a dedicated user and install location:
+1. Install `uv` system-wide so it's available to any service user (the
+   default installer puts it in `~/.local/bin` for whichever user runs it,
+   which won't be readable by a dedicated service account):
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_INSTALL_DIR="/usr/local/bin" sh
+```
+
+2. Create a dedicated user and install location:
 ```bash
 sudo useradd -m -s /usr/sbin/nologin slackbot
 sudo git clone <repository-url> /opt/kentik-ai-advisor-slackbot
@@ -219,19 +228,19 @@ sudo cp .env.example .env  # then fill in your credentials
 sudo chown -R slackbot:slackbot /opt/kentik-ai-advisor-slackbot
 ```
 
-2. Install dependencies as the service user:
+3. Install dependencies as the service user:
 ```bash
 sudo -u slackbot uv sync --all-extras --directory /opt/kentik-ai-advisor-slackbot
 ```
 
-3. Install and start the service:
+4. Install and start the service:
 ```bash
 sudo cp deploy/systemd/kentik-ai-advisor-slackbot.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now kentik-ai-advisor-slackbot
 ```
 
-4. Check status and logs:
+5. Check status and logs:
 ```bash
 sudo systemctl status kentik-ai-advisor-slackbot
 sudo journalctl -u kentik-ai-advisor-slackbot -f

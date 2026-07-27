@@ -6,6 +6,7 @@ from slack_bolt.context.set_status.async_set_status import AsyncSetStatus
 from slack_sdk.web.async_client import AsyncWebClient
 
 from kentik_ai_advisor_slackbot.app import ctx
+from kentik_ai_advisor_slackbot.slack_messages import resolve_mentions
 
 logger = logging.getLogger(__file__)
 
@@ -58,13 +59,16 @@ async def handle_assistant_user_message(
 
     channel_id = payload.get("channel")
     thread_ts = payload.get("thread_ts")
-    question = payload.get("text", "").strip()
+    text = payload.get("text", "").strip()
 
-    if not question:
+    if not text:
         await say("Please ask a question about your network.")
         return
 
     await set_status("Thinking...")
+
+    bot_user_id = await ctx.engine.get_bot_user_id(client)
+    question = await resolve_mentions(client, text, bot_user_id)
 
     await ctx.engine.handle_question(
         client=client,

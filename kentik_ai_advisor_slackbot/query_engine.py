@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 from typing import Callable, Awaitable, Any
 
 from slack_sdk.errors import SlackApiError
@@ -18,6 +17,7 @@ from kentik_ai_advisor_slackbot.slack_messages import (
     get_thread_messages,
     get_messages_since_last_bot_reply,
     extract_user_messages,
+    resolve_mentions,
     post_message,
     update_message,
 )
@@ -65,8 +65,8 @@ class QueryEngine:
                 # Get recent user messages since last bot reply for context
                 if event_ts:
                     messages = await get_thread_messages(client, channel_id, thread_ts)
-                    recent_context = get_messages_since_last_bot_reply(
-                        messages, bot_user_id, event_ts
+                    recent_context = await get_messages_since_last_bot_reply(
+                        client, messages, bot_user_id, event_ts
                     )
 
                     # Include recent messages as context (exclude the current question)
@@ -89,11 +89,13 @@ class QueryEngine:
                     # Get the first message and previous N user messages
                     first_msg = messages[0]
                     first_text = first_msg.get("text", "").strip()
-                    first_text = re.sub(r"<@\w+>", "", first_text).strip()
+                    first_text = await resolve_mentions(client, first_text, bot_user_id)
 
                     # Get context messages (excluding the current one)
-                    context_messages = extract_user_messages(
-                        messages[1:-1], bot_user_id
+                    context_messages = (
+                        await extract_user_messages(
+                            client, messages[1:-1], bot_user_id
+                        )
                     )[-THREAD_CONTEXT_MESSAGES:]
 
                     # Build context prompt

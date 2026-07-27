@@ -8,6 +8,52 @@ from slack_sdk.errors import SlackApiError
 
 from .config import logger
 
+MENTION_PATTERN = re.compile(r"<@(\w+)>")
+
+
+async def resolve_mentions(
+    client: AsyncWebClient, text: str, bot_user_id: str | None = None
+) -> str:
+    """Replace Slack user mentions with the mentioned user's email address.
+
+    The bot's own mention is stripped, matching the previous behavior.
+    Other mentioned users are replaced with their email so the AI Advisor
+    prompt can reference the right person instead of an opaque Slack ID.
+
+    Args:
+        client: Slack AsyncWebClient
+        text: Raw Slack message text, e.g. containing "<@U12345>"
+        bot_user_id: Bot's user ID, stripped from the text rather than resolved
+
+    Returns:
+        Text with mentions replaced by email addresses (or stripped, for the bot)
+    """
+    user_ids = {match.group(1) for match in MENTION_PATTERN.finditer(text)}
+    if not user_ids:
+        return text.strip()
+
+    replacements = {
+        user_id: "" if user_id == bot_user_id else await _get_user_email(client, user_id)
+        for user_id in user_ids
+    }
+
+    return MENTION_PATTERN.sub(lambda m: replacements[m.group(1)], text).strip()
+
+
+async def _get_user_email(client: AsyncWebClient, user_id: str) -> str:
+    """Look up a Slack user's email, falling back to their display name.
+
+    Requires the users:read and users:read.email bot scopes.
+    """
+    try:
+        response = await client.users_info(user=user_id)
+        user = response.get("user", {})
+        email = user.get("profile", {}).get("email")
+        return email or user.get("real_name") or user.get("name") or user_id
+    except SlackApiError as e:
+        logger.error(f"failed to resolve user {user_id}: {e.response['error']}")
+        return user_id
+
 
 async def get_thread_messages(
     client: AsyncWebClient, channel_id: str, thread_ts: str, limit: int = 100
@@ -35,12 +81,16 @@ async def get_thread_messages(
         return []
 
 
-def get_messages_since_last_bot_reply(
-    messages: list[dict[str, Any]], bot_user_id: str, current_msg_ts: str
+async def get_messages_since_last_bot_reply(
+    client: AsyncWebClient,
+    messages: list[dict[str, Any]],
+    bot_user_id: str,
+    current_msg_ts: str,
 ) -> list[str]:
     """Get all user messages since the last bot reply.
 
     Args:
+        client: Slack AsyncWebClient
         messages: List of Slack messages in thread
         bot_user_id: Bot's user ID
         current_msg_ts: Timestamp of current message (to exclude)
@@ -59,20 +109,23 @@ def get_messages_since_last_bot_reply(
             last_bot_index = i
 
     if last_bot_index >= 0 and current_msg_index > last_bot_index:
-        user_messages = extract_user_messages(
-            messages[last_bot_index + 1 : current_msg_index], bot_user_id
+        return await extract_user_messages(
+            client, messages[last_bot_index + 1 : current_msg_index], bot_user_id
         )
-        return user_messages
 
     return []
 
 
-def extract_user_messages(
-    messages: list[dict[str, Any]], bot_user_id: str, from_index: int = 0
+async def extract_user_messages(
+    client: AsyncWebClient,
+    messages: list[dict[str, Any]],
+    bot_user_id: str,
+    from_index: int = 0,
 ) -> list[str]:
     """Extract user messages (excluding bot messages) from thread.
 
     Args:
+        client: Slack AsyncWebClient
         messages: List of Slack messages
         bot_user_id: Bot's user ID to filter out
         from_index: Start from this message index
@@ -88,7 +141,7 @@ def extract_user_messages(
         if user_id == bot_user_id or not text:
             continue
 
-        text = re.sub(r"<@\w+>", "", text).strip()
+        text = await resolve_mentions(client, text, bot_user_id)
         if text:
             user_messages.append(text)
 

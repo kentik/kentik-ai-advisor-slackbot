@@ -4,6 +4,7 @@ from typing import Any
 from slack_sdk.web.async_client import AsyncWebClient
 
 from kentik_ai_advisor_slackbot.app import ctx
+from kentik_ai_advisor_slackbot.slack_messages import resolve_mentions
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +34,17 @@ async def handle_message(event: dict[str, Any], client: AsyncWebClient):
     if event.get("subtype") == "bot_message":
         return
 
-    question = event.get("text", "").strip()
+    text = event.get("text", "").strip()
     channel_id = event.get("channel")
     user_id = event.get("user")
 
-    if not question:
+    if not text:
         return
 
     logger.info(f"processing message from user {user_id} in channel {channel_id}")
+
+    bot_user_id = await ctx.engine.get_bot_user_id(client)
+    question = await resolve_mentions(client, text, bot_user_id)
 
     # Handle as new conversation (no threading in DMs)
     await ctx.engine.handle_question(
