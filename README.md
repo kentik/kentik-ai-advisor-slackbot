@@ -60,8 +60,8 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
-  assistant_view:
-    assistant_description: Ask questions about your network using Kentik's AI Advisor
+  agent_view:
+    agent_description: Ask questions about your network using Kentik's AI Advisor
   bot_user:
     display_name: kentik
     always_online: true
@@ -76,19 +76,38 @@ oauth_config:
       - im:read
       - im:write
       - assistant:write
+      - users:read
+      - users:read.email
 settings:
   event_subscriptions:
     bot_events:
       - app_mention
       - message.im
-      - assistant_thread_started
-      - assistant_thread_context_changed
+      - app_home_opened
   interactivity:
     is_enabled: true
   org_deploy_enabled: false
   socket_mode_enabled: true
   token_rotation_enabled: false
 ```
+
+> **Migrating an existing app?** Slack replaced the legacy Assistant messaging
+> experience (separate Chat/History tabs) with the [Agent messaging
+> experience](https://docs.slack.dev/changelog/2026/06/30/agent-messages-tab)
+> (conversations in the standard Messages tab). If your app was created before
+> this change, it's still configured with `assistant_view` in its manifest and
+> DMs will stop working correctly. To fix it:
+> 1. Go to your app at [api.slack.com/apps](https://api.slack.com/apps) →
+>    **App Manifest**, and replace `assistant_view` with `agent_view` (and
+>    `assistant_description` with `agent_description`) as shown above. You can
+>    also do this from the **Agent** tab in app settings.
+> 2. Update **Event Subscriptions** to replace `assistant_thread_started` /
+>    `assistant_thread_context_changed` with `app_home_opened`.
+> 3. Reinstall the app if scopes changed, and have users hard-refresh Slack to
+>    pick up the new Messages tab experience.
+>
+> **This change cannot be reverted** once made — Slack does not allow
+> switching an app back from `agent_view` to `assistant_view`.
 
 ### 2. Install App to Workspace
 
@@ -186,6 +205,58 @@ docker run -d --restart unless-stopped \
   -v $(pwd)/conversations.db:/app/conversations.db \
   kentik/ai-advisor-slackbot:latest
 ```
+
+### Running as a systemd Service (Linux)
+
+If you're running from source rather than the Docker image (e.g. to pick up
+changes before they're published to Docker Hub), use the provided systemd
+unit at [`deploy/systemd/kentik-ai-advisor-slackbot.service`](deploy/systemd/kentik-ai-advisor-slackbot.service).
+
+1. Install `uv` system-wide so it's available to any service user (the
+   default installer puts it in `~/.local/bin` for whichever user runs it,
+   which won't be readable by a dedicated service account):
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_INSTALL_DIR="/usr/local/bin" sh
+```
+
+2. Create a dedicated user and install location:
+```bash
+sudo useradd -m -s /usr/sbin/nologin slackbot
+sudo git clone <repository-url> /opt/kentik-ai-advisor-slackbot
+cd /opt/kentik-ai-advisor-slackbot
+sudo cp .env.example .env  # then fill in your credentials
+sudo chown -R slackbot:slackbot /opt/kentik-ai-advisor-slackbot
+```
+
+3. Install dependencies as the service user:
+```bash
+sudo -u slackbot uv sync --all-extras --directory /opt/kentik-ai-advisor-slackbot
+```
+
+4. Install and start the service:
+```bash
+sudo cp deploy/systemd/kentik-ai-advisor-slackbot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now kentik-ai-advisor-slackbot
+```
+
+5. Check status and logs:
+```bash
+sudo systemctl status kentik-ai-advisor-slackbot
+sudo journalctl -u kentik-ai-advisor-slackbot -f
+```
+
+To deploy an update:
+```bash
+cd /opt/kentik-ai-advisor-slackbot
+sudo -u slackbot git pull
+sudo -u slackbot uv sync --all-extras
+sudo systemctl restart kentik-ai-advisor-slackbot
+```
+
+> The unit file assumes `uv` is installed system-wide at `/usr/local/bin/uv`
+> and the repo lives at `/opt/kentik-ai-advisor-slackbot`. Adjust
+> `ExecStart`/`WorkingDirectory` if your paths differ.
 
 ## How It Works
 
