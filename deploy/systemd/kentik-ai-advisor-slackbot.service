@@ -1,0 +1,23 @@
+[Unit]
+Description=Kentik AI Advisor Slackbot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=slackbot
+Group=slackbot
+WorkingDirectory=/opt/kentik-ai-advisor-slackbot
+EnvironmentFile=/opt/kentik-ai-advisor-slackbot/.env
+ExecStart=/usr/local/bin/uv run kentik-ai-advisor-slackbot
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/kentik-ai-advisor-slackbot
+
+[Install]
+WantedBy=multi-user.target

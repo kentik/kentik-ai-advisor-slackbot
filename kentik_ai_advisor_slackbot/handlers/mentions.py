@@ -1,11 +1,10 @@
 import logging
-import re
 from typing import Any
 
 from slack_sdk.web.async_client import AsyncWebClient
 
 from kentik_ai_advisor_slackbot.app import ctx
-from kentik_ai_advisor_slackbot.slack_messages import post_message
+from kentik_ai_advisor_slackbot.slack_messages import post_message, resolve_mentions
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +31,9 @@ async def handle_app_mention(event: dict[str, Any], client: AsyncWebClient):
 
     logger.info(f"processing mention from user {user_id} in channel {channel_id}")
 
-    # Remove bot mention from text
-    question = re.sub(r"<@\w+>", "", text).strip()
+    # Remove the bot's own mention; resolve any other mentioned user to their email
+    bot_user_id = await ctx.engine.get_bot_user_id(client)
+    question = await resolve_mentions(client, text, bot_user_id)
 
     if not question:
         help_text = (
