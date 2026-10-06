@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint & test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest supported (pyproject requires-python) and newest Python release
+        python-version: ["3.10", "3.14"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff)
+        run: uv run --frozen ruff check .
+
+      - name: Import smoke test
+        env:
+          SLACK_BOT_TOKEN: dummy
+          SLACK_APP_TOKEN: dummy
+          KENTIK_API_URL: http://localhost
+          KENTIK_API_EMAIL: ci@example.com
+          KENTIK_API_TOKEN: dummy
+        run: uv run --frozen python -c "import kentik_ai_advisor_slackbot.app"
+
+      - name: Run tests (pytest)
+        # Exit code 5 means no tests were collected; don't fail until tests exist
+        run: uv run --frozen pytest -v || [ $? -eq 5 ]
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
+
+      - name: Build Docker image
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5.1.0
+        with:
+          context: .
+          push: false
+          tags: kentik/ai-advisor-slackbot:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
