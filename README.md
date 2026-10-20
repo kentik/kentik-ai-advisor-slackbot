@@ -91,21 +91,26 @@ settings:
   token_rotation_enabled: false
 ```
 
-> **Migrating an existing app?** Slack replaced the legacy Assistant messaging
-> experience (separate Chat/History tabs) with the [Agent messaging
-> experience](https://docs.slack.dev/changelog/2026/06/30/agent-messages-tab)
-> (conversations in the standard Messages tab). If your app was created before
-> this change, it's still configured with `assistant_view` in its manifest and
-> DMs will stop working correctly. To fix it:
-> 1. Go to your app at [api.slack.com/apps](https://api.slack.com/apps) →
->    **App Manifest**, and replace `assistant_view` with `agent_view` (and
->    `assistant_description` with `agent_description`) as shown above. You can
->    also do this from the **Agent** tab in app settings.
-> 2. Update **Event Subscriptions** to replace `assistant_thread_started` /
->    `assistant_thread_context_changed` with `app_home_opened`.
-> 3. Reinstall the app if scopes changed, and have users hard-refresh Slack to
->    pick up the new Messages tab experience.
->
+#### ⚠️ Breaking change in v1.0.0: Migrating an existing app
+
+Starting with v1.0.0, the bot uses Slack's Agent messaging experience instead
+of the legacy Assistant one. Slack replaced the legacy Assistant messaging experience (separate
+Chat/History tabs) with the [Agent messaging
+experience](https://docs.slack.dev/changelog/2026/06/30/agent-messages-tab)
+(conversations in the standard Messages tab). If your app was created before
+this change, it's still configured with `assistant_view` in its manifest and
+DMs will stop working correctly. To fix it:
+
+1. Go to your app at [api.slack.com/apps](https://api.slack.com/apps) →
+   **App Manifest**, and replace `assistant_view` with `agent_view` (and
+   `assistant_description` with `agent_description`) as shown above. You can
+   also do this from the **Agent** tab in app settings.
+2. Update **Event Subscriptions** to replace `assistant_thread_started` /
+   `assistant_thread_context_changed` with `app_home_opened`.
+3. Reinstall the app if scopes changed, and have users hard-refresh Slack to
+   pick up the new Messages tab experience.
+
+> [!WARNING]
 > **This change cannot be reverted** once made — Slack does not allow
 > switching an app back from `agent_view` to `assistant_view`.
 
